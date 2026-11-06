@@ -144,7 +144,7 @@ tr.dim td{opacity:.45}
 .cup{color:#7ad67a}.cdn{color:#ff8a7a}
 </style></head>
 <body><div id="root"></div>
-<script>/* MountyHall Solo v23 */
+<script>/* MountyHall Solo v24 */
 /* ===== 00_core.js ===== */
 'use strict';
 /* ==========================================================================
@@ -4033,6 +4033,74 @@ MH.refreshShop = function () {
   const _ma = MH.actMissionAbandon;
   MH.actMissionAbandon = function (c) { const m = c.mission; if (m && m.kind === 'enquete') MH.G.actors.forEach(a => { if (a.boss && a.questId === m.id) a.questId = null; }); return _ma(c); };
   MH.REWARD.enquete = { p: 1, o: { minTpl: 1, deep: 2, mithril: 2 } };
+})();
+
+/* ===== 49_legend.js ===== */
+'use strict';
+/* ==========================================================================
+   Artefacts légendaires [EXTRA] : équipements uniques, nommés, aux templates
+   fixes, dotés d'une histoire. Un seul exemplaire de chacun par partie.
+   Sources : champions (Traque, Enquête), récompenses de Purification/Traque,
+   plus rarement le butin des monstres profonds.
+   ========================================================================== */
+(function () {
+  MH.ARTEFACTS = [
+    { id: 'croc', name: 'Croc de Grishnak', cat: 'arme', kind: 'Dague', mithril: true, t: [['att', 3], ['deg', 2]], lore: 'Arraché au dernier chef des Fils de Pierre, il chante quand il sent le sang.' },
+    { id: 'fendoir', name: 'Fendoir des Anciens', cat: 'arme', kind: 'Épée à deux mains', t: [['deg', 4], ['att', 2], ['pv', 10], ['arm', 1], ['reg', 1]], lore: 'Forgé avant la fondation du Hall. Personne ne sait qui a fini par le lâcher.' },
+    { id: 'rapiere', name: 'Murmure-Lame', cat: 'arme', kind: 'Rapière', mithril: true, t: [['esq', 3], ['att', 2]], lore: 'On n\'entend jamais son coup. Seulement ce qui vient après.' },
+    { id: 'hache', name: 'Brise-Échos', cat: 'arme', kind: 'Hache', t: [['deg', 3], ['pv', 10], ['att', 1]], lore: 'Quand elle frappe la pierre, les galeries tremblent trois niveaux plus bas.' },
+    { id: 'plaques', name: 'Rempart de Dromm', cat: 'armure', kind: 'Armure de plaques', t: [['arm', 3], ['pv', 15], ['reg', 2]], lore: 'Dromm l\'a portée quarante ans sans jamais l\'enlever. On l\'a retrouvée sans lui.' },
+    { id: 'mailles', name: 'Voile de Mithril de Yggla', cat: 'armure', kind: 'Cotte de mailles', mithril: true, t: [['esq', 3], ['arm', 2]], lore: 'Légère comme un souffle, elle dévie les coups que l\'on ne voit pas venir.' },
+    { id: 'heaume', name: 'Couronne du Gouffre', cat: 'casque', kind: 'Heaume', mithril: true, t: [['vue', 3]], lore: 'Qui la porte voit plus loin que les ténèbres ne le permettent.' },
+    { id: 'cornes', name: 'Cornes de Vorka', cat: 'casque', kind: 'Casque à cornes', t: [['att', 2], ['pv', 10]], lore: 'Trophée d\'une chasse restée célèbre. Vorka ne l\'a jamais racontée.' },
+    { id: 'bottes', name: 'Bottes du Sans-Retour', cat: 'bottes', kind: 'Bottes ferrées', mithril: true, t: [['esq', 2]], lore: 'Elles ne laissent aucune trace. Beaucoup les ont cherchées ; peu sont revenus.' },
+    { id: 'sandales', name: 'Sandales de Lurtz', cat: 'bottes', kind: 'Sandales', t: [['reg', 2], ['pv', 10]], lore: 'Un vieux troll les disait bénies. Il avait peut-être raison.' }
+  ];
+  MH.RARITY_COL[4] = '#ff8a3a';
+  const art = it => it && it.artefact && MH.ARTEFACTS.find(a => a.id === it.artefact);
+  MH.makeArtefact = function (depth, preferCat) {
+    const G = MH.G; G.artefacts = G.artefacts || {};
+    const pool = MH.ARTEFACTS.filter(a => !G.artefacts[a.id] && (!preferCat || a.cat === preferCat)); if (!pool.length) return null;
+    const a = MH.pick(pool); G.artefacts[a.id] = true;
+    let it, g = 0; do { it = MH.makeItem(a.cat, Math.max(3, depth)); } while ((it.kind !== a.kind) && ++g < 400);
+    if (it.kind !== a.kind) { const list = { arme: MH.WEAPONS, armure: MH.ARMORS, casque: MH.HELMS, bottes: MH.BOOTS }[a.cat], b = list.find(x => x.k === a.kind); it = MH.makeItem(a.cat, 1); Object.assign(it, { kind: b.k, w: b.w, mod: Object.assign({}, b.mod), price: b.price }); }
+    // base vierge : retire les templates/mithril tirés au hasard
+    const baseMod = Object.assign({}, it.mod); (it.templates || []).forEach(t => { baseMod[t.s] = (baseMod[t.s] || 0) - t.v; if (!baseMod[t.s]) delete baseMod[t.s]; });
+    it.mod = baseMod; it.templates = []; it.suffix = ''; it.cursed = false; if (it.mithril) { it.mithril = false; it.w = (MH.WEAPONS.concat(MH.ARMORS, MH.HELMS, MH.BOOTS).find(x => x.k === a.kind) || { w: it.w }).w; }
+    if (a.mithril) MH.makeMithril(it);
+    a.t.forEach(([s, v]) => MH.addTemplate(it, s, v));
+    it.artefact = a.id; it.price = Math.round(it.price * 3 + 300);
+    return it;
+  };
+  MH.announceArtefact = function (it) { const a = art(it); if (a) { MH.msg('lvl', `★ Artefact légendaire : ${a.name} — ${a.lore}`); MH.journal(`Artefact : ${a.name}.`); MH.news(`${MH.G.p.name} met la main sur ${a.name} !`); } };
+
+  /* nom : un artefact identifié porte son vrai nom */
+  const _in = MH.itemName;
+  MH.itemName = function (it, v) {
+    const a = art(it); if (a && it.ident) return `★ ${a.name} (${it.kind}${it.mithril ? ' en mithril' : ''})`;
+    return _in(it, v);
+  };
+  /* annonce à l'identification */
+  const _id = MH.identifyItem;
+  MH.identifyItem = function (c, it) { _id(c, it); MH.announceArtefact(it); };
+  /* toujours le plus haut niveau de rareté */
+  const _ro = MH.rarityOf;
+  MH.rarityOf = function (it) { return it && it.artefact ? 4 : _ro(it); };
+
+  /* sources */
+  const _gr = MH.giveReward;
+  MH.giveReward = function (c, m) {
+    const chance = { traque: 0.3, enquete: 0.3, purge: 0.25 }[m.kind || ''];
+    if (chance && MH.chance(chance)) { const it = MH.makeArtefact(c.lvl + 2); if (it) { it.held = true; it.ident = true; c.inv.push(it); MH.announceArtefact(it); return; } }
+    return _gr(c, m);
+  };
+  const _omd = MH.onMonsterDeath;
+  MH.onMonsterDeath = function (v, killer) {
+    if (_omd) _omd(v, killer);
+    if (v.boss && MH.chance(0.35)) { const it = MH.makeArtefact(v.n + 2); if (it) { MH.dropItem(v.n, v.x, v.y, it); MH.msg('loot', `Quelque chose brille parmi le butin de ${v.name}…`); } }
+    else if (!v.boss && v.lvl >= 14 && MH.chance(0.015)) { const it = MH.makeArtefact(v.n + 2); if (it) MH.dropItem(v.n, v.x, v.y, it); }
+  };
+  if (MH.ACHIEVEMENTS) MH.ACHIEVEMENTS.push(['legende', 'Légende vivante', 'Posséder un artefact légendaire.', (G, p) => MH.allItems(p).some(i => i.artefact)]);
 })();
 
 /* ===== 49_polish.js ===== */
